@@ -1,6 +1,7 @@
 const User = require('../models/user');
 const Channel = require('../models/channel');
 const Message = require('../models/message');
+const { Friend } = require('../models/friend');
 
 const { validationResult } = require('express-validator');
 
@@ -94,7 +95,19 @@ exports.postChannel = async function (req, res, next) {
       error.statusCode = 403;
       throw error;
     }
+    if (channel.isDM) {
+      const friendship = await Friend.findOne({
+        requester: channel.participants[0],
+        recipient: channel.participants[1],
+      });
+      if (!friendship) {
+        const error = new Error('User is not friends with participant');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
     const content = req.body.content;
+    console.log(content);
     const message = new Message({
       channel: cid,
       author: req.userId,

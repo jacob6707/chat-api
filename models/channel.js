@@ -7,6 +7,10 @@ const channelSchema = new Schema(
       type: String,
       required: true,
     },
+    isDM: {
+      type: Boolean,
+      default: false,
+    },
     messages: [
       {
         type: Schema.Types.ObjectId,
