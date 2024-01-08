@@ -4,6 +4,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 
 const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
+const channelsRoutes = require('./routes/channels');
 
 require('dotenv').config();
 
@@ -16,6 +18,8 @@ app.use(bodyParser.json());
 app.use(cors());
 
 app.use('/auth', authRoutes);
+app.use('/users', usersRoutes);
+app.use('/channels', channelsRoutes);
 
 app.use((error, req, res, next) => {
   console.log(error);

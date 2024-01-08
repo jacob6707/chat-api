@@ -45,13 +45,13 @@ exports.login = async (req, res, next) => {
     const user = await User.findOne({ username: username });
     if (!user) {
       const error = new Error(`Failed to find user with username ${username}.`);
-      error.statusCode(401);
+      error.statusCode = 401;
       throw error;
     }
     const isEqual = await bcrypt.compare(password, user.password);
     if (!isEqual) {
       const error = new Error(`Password does not match.`);
-      error.statusCode(401);
+      error.statusCode = 401;
       throw error;
     }
     const token = jwt.sign(
@@ -75,9 +75,7 @@ exports.login = async (req, res, next) => {
 exports.testToken = (req, res, next) => {
   const authHeader = req.get('Authorization');
   if (!authHeader) {
-    const error = new Error('Not authenticated');
-    error.statusCode = 401;
-    throw error;
+    res.status(401).json({ message: 'Not authenticated' });
   }
   const token = authHeader.split(' ')[1];
   const uid = jwt.decode(token, { json: true }).userId;

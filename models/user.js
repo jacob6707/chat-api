@@ -34,6 +34,19 @@ const userSchema = new Schema(
         ref: 'User',
       },
     ],
+    directMessages: [
+      {
+        _id: false,
+        userId: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+        channelId: {
+          type: Schema.Types.ObjectId,
+          ref: 'Channel',
+        },
+      },
+    ],
   },
   { timestamps: true }
 );
