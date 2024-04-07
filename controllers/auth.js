@@ -49,13 +49,16 @@ exports.login = async (req, res, next) => {
 	const password = req.body.password;
 
 	try {
-		const user = await User.findOne({ username: username });
+		const user = await User.findOne({
+			$or: [{ email: username }, { username: username }],
+		});
 		if (!user) {
-			const error = new Error(`Failed to find user with username ${username}.`);
+			const error = new Error(`User ${username} does not exist`);
 			error.statusCode = 401;
 			throw error;
 		}
-		const isEqual = await bcrypt.compare(password, user.password);
+		const { password: userPassword, ...userData } = user.toObject();
+		const isEqual = await bcrypt.compare(password, userPassword);
 		if (!isEqual) {
 			const error = new Error(`Password does not match.`);
 			error.statusCode = 401;
@@ -63,14 +66,14 @@ exports.login = async (req, res, next) => {
 		}
 		const token = jwt.sign(
 			{
-				userId: user.id,
+				userId: userData._id,
 			},
-			user.password,
+			userPassword,
 			{
 				noTimestamp: true,
 			}
 		);
-		res.status(200).json({ userId: user.id, token: token });
+		res.status(200).json({ user: userData, token: token });
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;
