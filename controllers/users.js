@@ -5,6 +5,22 @@ const { Friend, FriendStatus } = require("../models/friend");
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
 		.select("-password")
+		.populate("friends", "-createdAt -updatedAt -__v -requester -recipient")
+		.populate("directMessages.userId", "displayName status about avatarUrl")
+		.populate({
+			path: "directMessages.channelId",
+			select: "_id name isDM messages participants",
+			populate: [
+				{
+					path: "participants",
+					select: "displayName status about avatarUrl",
+				},
+				{
+					path: "messages",
+					options: { sort: { createdAt: -1 }, limit: 1 },
+				},
+			],
+		})
 		.then((user) => {
 			if (!user) {
 				const error = new Error("User not found");
@@ -27,7 +43,9 @@ exports.getUser = (req, res, next) => {
 		res.status(422).json({ message: "User ID invalid" });
 	}
 	User.findById(uid)
-		.select("-email -password -friends")
+		.select(
+			"-email -password -friends -directMessages -createdAt -updatedAt -__v"
+		)
 		.then((user) => {
 			if (!user) {
 				const error = new Error("User not found");
@@ -46,20 +64,31 @@ exports.getUser = (req, res, next) => {
 
 exports.addFriend = async function (req, res, next) {
 	const UserA = req.userId;
-	const UserB = req.params.id;
-	if (!UserB.match(/^[0-9a-fA-F]{24}$/)) {
-		res.status(422).json({ message: "User ID invalid" });
-	}
+	let UserB = req.params.id;
 	if (UserA.toString() === UserB.toString()) {
-		res.status(422).json({ message: "Cannot add yourself" });
+		return res.status(422).json({ message: "Cannot add yourself" });
+	}
+	let orQuery = [{ username: UserB }, { email: UserB }];
+	if (UserB.match(/^[0-9a-fA-F]{24}$/)) {
+		orQuery.push({ _id: UserB });
 	}
 	try {
-		if (!(await User.findById(UserB))) {
+		if (
+			!(await User.findOne({
+				$or: orQuery,
+			}))
+		) {
 			const error = new Error("User not found");
 			error.statusCode = 404;
 			throw error;
 		}
-		const user2 = await User.findById(UserB).populate("friends");
+		const user2 = await User.findOne({
+			$or: orQuery,
+		}).populate("friends");
+		if (user2._id.toString() === UserA.toString()) {
+			return res.status(422).json({ message: "Cannot add yourself" });
+		}
+		UserB = user2._id.toString();
 		if (
 			user2.friends.find((f) => {
 				return (
@@ -151,10 +180,8 @@ exports.postMessage = async function (req, res, next) {
 		if (!uid.match(/^[0-9a-fA-F]{24}$/)) {
 			res.status(422).json({ message: "User ID invalid" });
 		}
-		const user = await User.findOne({ _id: req.userId })
-			.select("directMessages friends")
-			.populate("friends");
-		const user2 = await User.findOne({ _id: uid }).select("directMessages");
+		const user = await User.findOne({ _id: req.userId }).populate("friends");
+		const user2 = await User.findOne({ _id: uid });
 		if (!user) {
 			const error = new Error("User not found");
 			error.statusCode = 403;

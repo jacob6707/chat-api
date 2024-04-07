@@ -22,10 +22,16 @@ const userSchema = new Schema(
 		},
 		avatarUrl: {
 			type: String,
-			default: "/images/default.png",
+			default: "",
 		},
-		status: String,
-		about: String,
+		status: {
+			type: String,
+			default: "",
+		},
+		about: {
+			type: String,
+			default: "",
+		},
 		birthday: Date,
 		friends: [
 			{
