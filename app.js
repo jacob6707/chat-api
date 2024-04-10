@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
 const channelsRoutes = require("./routes/channels");
+const { joinChannel } = require("./util/socketEvents");
 
 require("dotenv").config();
 
@@ -37,6 +38,16 @@ mongoose
 	.then((connection) => {
 		const server = app.listen(PORT, () => {
 			console.log(`Server listening on port ${PORT}`);
+		});
+		const io = require("./socket").init(server);
+		io.on("connection", (socket) => {
+			socket.on("joinChannel", ({ token, channelId }) => {
+				joinChannel(socket, token, channelId);
+			});
+			socket.on("leaveChannel", ({ channelId }) => {
+				socket.leave(channelId);
+				console.log(`User left channel ${channelId}`);
+			});
 		});
 	})
 	.catch((err) => {

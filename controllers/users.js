@@ -5,7 +5,7 @@ const { Friend, FriendStatus } = require("../models/friend");
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
 		.select("-password")
-		.populate("friends", "-createdAt -updatedAt -__v -requester -recipient")
+		.populate("friends", "-updatedAt -__v")
 		.populate("directMessages.userId", "displayName status about avatarUrl")
 		.populate({
 			path: "directMessages.channelId",

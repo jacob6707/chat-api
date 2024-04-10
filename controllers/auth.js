@@ -51,7 +51,23 @@ exports.login = async (req, res, next) => {
 	try {
 		const user = await User.findOne({
 			$or: [{ email: username }, { username: username }],
-		});
+		})
+			.populate("friends", "-updatedAt -__v")
+			.populate("directMessages.userId", "displayName status about avatarUrl")
+			.populate({
+				path: "directMessages.channelId",
+				select: "_id name isDM messages participants",
+				populate: [
+					{
+						path: "participants",
+						select: "displayName status about avatarUrl",
+					},
+					{
+						path: "messages",
+						options: { sort: { createdAt: -1 }, limit: 1 },
+					},
+				],
+			});
 		if (!user) {
 			const error = new Error(`User ${username} does not exist`);
 			error.statusCode = 401;
