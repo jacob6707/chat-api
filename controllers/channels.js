@@ -30,7 +30,7 @@ exports.getChannel = (req, res, next) => {
 				error.statusCode = 403;
 				throw error;
 			}
-			res.status(200).json(channel);
+			return res.status(200).json(channel);
 		})
 		.catch((err) => {
 			if (!err.statusCode) {
@@ -179,11 +179,153 @@ exports.postChannel = async function (req, res, next) {
 		await message.save();
 		channel.messages.push(message);
 		await channel.save();
-		getIO().to(cid).emit("message", {
-			action: "create",
-			channel: cid,
+		getIO()
+			.to(cid)
+			.emit("message", {
+				action: "create",
+				channel: cid,
+				sender: channel.participants.find(
+					(p) => p.toString() !== req.userId.toString()
+				).displayName,
+				content: content,
+			});
+		return res.status(200).send(message);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.createChannel = async function (req, res, next) {
+	// TODO: Implement creating a channel with multiple participants, a name, and a channel photo (optional)
+	try {
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			const error = new Error("Validation failed");
+			error.statusCode = 422;
+			error.data = errors.array();
+			throw error;
+		}
+		const participants = req.body.participants;
+		participants.push(req.userId);
+		// check if participants exist
+		const users = await User.find({
+			_id: { $in: participants },
+		}).countDocuments();
+		if (users !== participants.length) {
+			const error = new Error("One or more participants not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		const name = req.body.name;
+		const channel = new Channel({
+			participants,
+			name,
 		});
-		res.status(200).send(message);
+		await channel.save();
+		// add channel to participants' direct messages
+		for (const participant of participants) {
+			const user = await User.findOne({ _id: participant });
+			user.directMessages.push({ userId: participant, channelId: channel.id });
+			await user.save();
+		}
+		return res.status(201).json(channel);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.addParticipant = async function (req, res, next) {
+	// TODO: Implement adding a participant to a channel
+	try {
+		const cid = req.params.id;
+		const uid = req.body.userId;
+		if (!cid.match(/^[0-9a-fA-F]{24}$/) || !uid.match(/^[0-9a-fA-F]{24}$/)) {
+			return res.status(422).json({ message: "Channel ID or User ID invalid" });
+		}
+		const channel = await Channel.findById(cid);
+		if (!channel) {
+			const error = new Error("Channel not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (
+			!channel.participants.find((p) => p.toString() === req.userId.toString())
+		) {
+			const error = new Error("User is not a participant of the channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		const user = await User.findById(uid);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (channel.participants.find((p) => p.toString() === uid.toString())) {
+			const error = new Error("User is already a participant of the channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		channel.participants.push(uid);
+		await channel.save();
+		user.directMessages.push({ userId: uid, channelId: cid });
+		await user.save();
+		return res.status(200).json(channel);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.removeParticipant = async function (req, res, next) {
+	// TODO: Implement removing a participant from a channel
+	try {
+		const cid = req.params.id;
+		const uid = req.body.userId;
+		if (!cid.match(/^[0-9a-fA-F]{24}$/) || !uid.match(/^[0-9a-fA-F]{24}$/)) {
+			return res.status(422).json({ message: "Channel ID or User ID invalid" });
+		}
+		const channel = await Channel.findById(cid);
+		if (!channel) {
+			const error = new Error("Channel not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (
+			!channel.participants.find((p) => p.toString() === req.userId.toString())
+		) {
+			const error = new Error("User is not a participant of the channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		const user = await User.findById(uid);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (!channel.participants.find((p) => p.toString() === uid.toString())) {
+			const error = new Error("User is not a participant of the channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		channel.participants = channel.participants.filter(
+			(p) => p.toString() !== uid.toString()
+		);
+		await channel.save();
+		user.directMessages = user.directMessages.filter(
+			(dm) => dm.channelId.toString() !== cid.toString()
+		);
+		await user.save();
+		res.status(200).json(channel);
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;

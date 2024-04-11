@@ -1,6 +1,7 @@
 const User = require("../models/user");
 const Channel = require("../models/channel");
 const { Friend, FriendStatus } = require("../models/friend");
+const { model } = require("mongoose");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
@@ -17,6 +18,8 @@ exports.getCurrentUser = (req, res, next) => {
 				},
 				{
 					path: "messages",
+					model: "Message",
+					perDocumentLimit: 1,
 					options: { sort: { createdAt: -1 }, limit: 1 },
 				},
 			],
