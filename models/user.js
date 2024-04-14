@@ -25,8 +25,15 @@ const userSchema = new Schema(
 			default: "",
 		},
 		status: {
-			type: String,
-			default: "",
+			preferred: {
+				type: String,
+				default: "Online",
+				select: false,
+			},
+			current: {
+				type: String,
+				default: "Offline",
+			},
 		},
 		about: {
 			type: String,
@@ -52,6 +59,11 @@ const userSchema = new Schema(
 				},
 			},
 		],
+		socketId: {
+			type: String,
+			default: "",
+			select: false,
+		},
 	},
 	{ timestamps: true }
 );

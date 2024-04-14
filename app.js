@@ -30,25 +30,17 @@ app.use((error, req, res, next) => {
 	const status = error.statusCode;
 	const message = error.message;
 	const data = error.data;
-	res.status(status).json({ message: message, data: data });
+	return res.status(status).json({ message: message, data: data });
 });
 
 mongoose
 	.connect(MONGODB_ENDPOINT)
-	.then((connection) => {
+	.then(() => {
 		const server = app.listen(PORT, () => {
 			console.log(`Server listening on port ${PORT}`);
 		});
 		const io = require("./socket").init(server);
-		io.on("connection", (socket) => {
-			socket.on("joinChannel", ({ token, channelId }) => {
-				joinChannel(socket, token, channelId);
-			});
-			socket.on("leaveChannel", ({ channelId }) => {
-				socket.leave(channelId);
-				console.log(`User left channel ${channelId}`);
-			});
-		});
+		require("./socket").socketEvents();
 	})
 	.catch((err) => {
 		console.log(err);
