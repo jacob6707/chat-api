@@ -14,7 +14,13 @@ exports.getChannel = (req, res, next) => {
 	}
 	Channel.findById(cid)
 		.select("-messages -__v")
-		.populate("participants", "_id displayName socketId")
+		.populate("participants", "_id displayName status.current")
+		.populate({
+			path: "messages",
+			model: "Message",
+			perDocumentLimit: 1,
+			options: { sort: { createdAt: -1 }, limit: 1 },
+		})
 		.then((channel) => {
 			if (!channel) {
 				const error = new Error("Channel not found");
@@ -35,14 +41,9 @@ exports.getChannel = (req, res, next) => {
 				const otherUser = modifiedChannel.participants.find(
 					(p) => p._id.toString() !== req.userId.toString()
 				);
-				modifiedChannel.online = !!otherUser.socketId;
-				delete otherUser.socketId;
+				modifiedChannel.status = otherUser.status.current;
+				modifiedChannel.name = otherUser.displayName;
 			}
-			modifiedChannel.participants = modifiedChannel.participants.map((p) => {
-				p.online = !!p.socketId;
-				delete p.socketId;
-				return p;
-			});
 			return res.status(200).json(modifiedChannel);
 		})
 		.catch((err) => {
