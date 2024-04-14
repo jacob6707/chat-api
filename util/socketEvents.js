@@ -10,8 +10,10 @@ exports.authenticate = async function (socket, next) {
 	socket.user = user;
 	await User.findByIdAndUpdate(user._id, {
 		socketId: socket.id,
-		"status.current": user.status.preferred,
-		"status.preferred": user.status.preferred,
+		status: {
+			current: user.status.preferred,
+			preferred: user.status.preferred,
+		},
 	});
 	next();
 };

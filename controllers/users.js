@@ -261,8 +261,10 @@ exports.updateStatus = async function (req, res, next) {
 				_id: req.userId,
 			},
 			{
-				"status.preferred": status,
-				"status.current": status,
+				status: {
+					preferred: status,
+					current: status,
+				},
 			}
 		);
 		if (!user) {

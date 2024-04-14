@@ -30,7 +30,10 @@ module.exports = {
 				if (socket.user) {
 					await User.findByIdAndUpdate(socket.user._id, {
 						socketId: "",
-						"status.current": "Offline",
+						status: {
+							current: "Offline",
+							preferred: socket.user.status.preferred,
+						},
 					});
 				}
 			});
