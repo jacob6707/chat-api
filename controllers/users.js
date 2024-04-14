@@ -1,13 +1,15 @@
 const User = require("../models/user");
 const Channel = require("../models/channel");
 const { Friend, FriendStatus } = require("../models/friend");
-const { model } = require("mongoose");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
-		.select("-password")
+		.select("-password +status.preferred")
 		.populate("friends", "-updatedAt -__v")
-		.populate("directMessages.userId", "displayName status about avatarUrl")
+		.populate(
+			"directMessages.userId",
+			"displayName status about avatarUrl socketId"
+		)
 		.populate({
 			path: "directMessages.channelId",
 			select: "_id name isDM messages participants",
@@ -30,7 +32,13 @@ exports.getCurrentUser = (req, res, next) => {
 				error.statusCode = 404;
 				throw error;
 			}
-			res.status(200).json(user);
+			const modifiedUser = user.toObject();
+			modifiedUser.directMessages = modifiedUser.directMessages.map((dm) => {
+				dm.userId.online = !!dm.userId.socketId;
+				delete dm.userId.socketId;
+				return dm;
+			});
+			res.status(200).json(modifiedUser);
 		})
 		.catch((err) => {
 			if (!err.statusCode) {
@@ -109,6 +117,16 @@ exports.addFriend = async function (req, res, next) {
 				{ $set: { status: FriendStatus.FRIENDS } }
 			);
 			return res.status(200).json({ message: "Friend accepted" });
+		}
+		if (
+			user2.friends.find((f) => {
+				return (
+					f.recipient.toString() === UserA.toString() &&
+					f.status == FriendStatus.FRIENDS
+				);
+			})
+		) {
+			return res.status(422).json({ message: "Already friends with user" });
 		}
 		const docA = await Friend.findOneAndUpdate(
 			{ requester: UserA, recipient: UserB },
@@ -203,6 +221,7 @@ exports.postMessage = async function (req, res, next) {
 			const friendship = await Friend.findOne({
 				requester: req.userId,
 				recipient: uid,
+				status: FriendStatus.FRIENDS,
 			});
 			if (!friendship) {
 				const error = new Error("User is not friends with participant");
@@ -223,6 +242,35 @@ exports.postMessage = async function (req, res, next) {
 			status = 201;
 		}
 		res.status(status).json(dm);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.updateStatus = async function (req, res, next) {
+	const status = req.body.status;
+	if (!["Online", "Away", "Do Not Disturb", "Offline"].includes(status)) {
+		res.status(422).json({ message: "Invalid status" });
+	}
+	try {
+		const user = await User.findOneAndUpdate(
+			{
+				_id: req.userId,
+			},
+			{
+				"status.preferred": status,
+				"status.current": status,
+			}
+		);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		res.status(200).json({ message: "Status updated" });
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;

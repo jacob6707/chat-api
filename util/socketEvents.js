@@ -1,29 +1,24 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-
-const User = require("../models/user");
 const Channel = require("../models/channel");
+const User = require("../models/user");
+const { getUserFromToken } = require("./helpers");
 
-exports.joinChannel = async function (socket, token, channelId) {
+exports.authenticate = async function (socket, next) {
+	const token = socket.handshake.auth.token;
+	if (!token) return next(new Error("Authentication error"));
+	const user = await getUserFromToken(token);
+	if (!user) return next(new Error("Authentication error"));
+	socket.user = user;
+	await User.findByIdAndUpdate(user._id, {
+		socketId: socket.id,
+		"status.current": user.status.preferred,
+		"status.preferred": user.status.preferred,
+	});
+	next();
+};
+
+exports.joinChannel = async function (socket, channelId) {
 	try {
-		const dToken = jwt.decode(token, { json: true });
-		if (!dToken) {
-			return socket.emit("error", { message: "Not authenticated" });
-		}
-		const uid = dToken.userId;
-		const user = await User.findById(uid);
-		if (!user) {
-			const error = new Error("Bearer of token not found");
-			error.statusCode = 403;
-			throw error;
-		}
-		const secret = user.password;
-		const decodedToken = jwt.verify(token, secret);
-		if (!decodedToken) {
-			const error = new Error("Not authenticated");
-			error.statusCode = 401;
-			throw error;
-		}
+		const uid = socket.user._id.toString();
 		const userExists = await Channel.find({
 			channelId: channelId,
 			participants: {
@@ -32,7 +27,10 @@ exports.joinChannel = async function (socket, token, channelId) {
 		});
 		if (userExists) {
 			socket.join(channelId);
-			console.log(`User ${uid} joined channel ${channelId}`);
+			socket.to(channelId).emit("userJoined", {
+				channel: channelId,
+				user: uid,
+			});
 		}
 	} catch (err) {
 		if (!err.statusCode) {

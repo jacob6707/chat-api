@@ -16,4 +16,6 @@ router.delete("/:id/remove", isAuth, usersController.removeFriend);
 
 router.post("/:id/message", isAuth, usersController.postMessage);
 
+router.post("/status", isAuth, usersController.updateStatus);
+
 module.exports = router;

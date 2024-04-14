@@ -35,20 +35,12 @@ app.use((error, req, res, next) => {
 
 mongoose
 	.connect(MONGODB_ENDPOINT)
-	.then((connection) => {
+	.then(() => {
 		const server = app.listen(PORT, () => {
 			console.log(`Server listening on port ${PORT}`);
 		});
 		const io = require("./socket").init(server);
-		io.on("connection", (socket) => {
-			socket.on("joinChannel", ({ token, channelId }) => {
-				joinChannel(socket, token, channelId);
-			});
-			socket.on("leaveChannel", ({ channelId }) => {
-				socket.leave(channelId);
-				console.log(`User left channel ${channelId}`);
-			});
-		});
+		require("./socket").socketEvents();
 	})
 	.catch((err) => {
 		console.log(err);

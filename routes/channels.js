@@ -26,6 +26,8 @@ router.post(
 	channelsController.createChannel
 );
 
+router.delete("/:id", isAuth, channelsController.deleteChannel);
+
 router.post("/:id/add", isAuth, channelsController.addParticipant);
 
 router.post("/:id/remove", isAuth, channelsController.removeParticipant);

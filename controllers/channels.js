@@ -1,7 +1,7 @@
 const User = require("../models/user");
 const Channel = require("../models/channel");
 const Message = require("../models/message");
-const { Friend } = require("../models/friend");
+const { Friend, FriendStatus } = require("../models/friend");
 
 const { validationResult } = require("express-validator");
 const { MESSAGES_PER_PAGE } = require("../util/constants");
@@ -14,7 +14,7 @@ exports.getChannel = (req, res, next) => {
 	}
 	Channel.findById(cid)
 		.select("-messages -__v")
-		.populate("participants", "_id displayName")
+		.populate("participants", "_id displayName socketId")
 		.then((channel) => {
 			if (!channel) {
 				const error = new Error("Channel not found");
@@ -30,7 +30,20 @@ exports.getChannel = (req, res, next) => {
 				error.statusCode = 403;
 				throw error;
 			}
-			return res.status(200).json(channel);
+			const modifiedChannel = channel.toObject();
+			if (modifiedChannel.isDM) {
+				const otherUser = modifiedChannel.participants.find(
+					(p) => p._id.toString() !== req.userId.toString()
+				);
+				modifiedChannel.online = !!otherUser.socketId;
+				delete otherUser.socketId;
+			}
+			modifiedChannel.participants = modifiedChannel.participants.map((p) => {
+				p.online = !!p.socketId;
+				delete p.socketId;
+				return p;
+			});
+			return res.status(200).json(modifiedChannel);
 		})
 		.catch((err) => {
 			if (!err.statusCode) {
@@ -162,6 +175,7 @@ exports.postChannel = async function (req, res, next) {
 			const friendship = await Friend.findOne({
 				requester: channel.participants[0],
 				recipient: channel.participants[1],
+				status: FriendStatus.FRIENDS,
 			});
 			if (!friendship) {
 				const error = new Error("User is not friends with participant");
@@ -199,7 +213,6 @@ exports.postChannel = async function (req, res, next) {
 };
 
 exports.createChannel = async function (req, res, next) {
-	// TODO: Implement creating a channel with multiple participants, a name, and a channel photo (optional)
 	try {
 		const errors = validationResult(req);
 		if (!errors.isEmpty()) {
@@ -210,7 +223,6 @@ exports.createChannel = async function (req, res, next) {
 		}
 		const participants = req.body.participants;
 		participants.push(req.userId);
-		// check if participants exist
 		const users = await User.find({
 			_id: { $in: participants },
 		}).countDocuments();
@@ -223,15 +235,60 @@ exports.createChannel = async function (req, res, next) {
 		const channel = new Channel({
 			participants,
 			name,
+			owner: req.userId,
 		});
 		await channel.save();
-		// add channel to participants' direct messages
 		for (const participant of participants) {
 			const user = await User.findOne({ _id: participant });
 			user.directMessages.push({ userId: participant, channelId: channel.id });
 			await user.save();
 		}
 		return res.status(201).json(channel);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.deleteChannel = async function (req, res, next) {
+	try {
+		const cid = req.params.id;
+		if (!cid.match(/^[0-9a-fA-F]{24}$/)) {
+			return res.status(422).json({ message: "Channel ID invalid" });
+		}
+		const channel = await Channel.findById(cid);
+		if (!channel) {
+			const error = new Error("Channel not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (channel.isDM) {
+			return res.status(403).json({ message: "Cannot delete DM channel" });
+		}
+		if (
+			!channel.participants.find((p) => p.toString() === req.userId.toString())
+		) {
+			const error = new Error("User is not a participant of the channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		// if (channel.owner.toString() !== req.userId.toString()) {
+		// 	const error = new Error("User is not the owner of the channel");
+		// 	error.statusCode = 403;
+		// 	throw error;
+		// }
+		await Message.deleteMany({ channel: cid });
+		await Channel.findByIdAndDelete(cid);
+		for (const participant of channel.participants) {
+			const user = await User.findOne({ _id: participant });
+			user.directMessages = user.directMessages.filter(
+				(dm) => dm.channelId.toString() !== cid.toString()
+			);
+			await user.save();
+		}
+		return res.status(200).json({ message: "Channel deleted", channelId: cid });
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;
