@@ -4,7 +4,7 @@ const { Friend, FriendStatus } = require("../models/friend");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
-		.select("-password +status.preferred")
+		.select("-password -socketId +status.preferred")
 		.populate("friends", "-updatedAt -__v")
 		.populate(
 			"directMessages.userId",
@@ -33,10 +33,12 @@ exports.getCurrentUser = (req, res, next) => {
 				throw error;
 			}
 			const modifiedUser = user.toObject();
-			modifiedUser.directMessages = modifiedUser.directMessages.map((dm) => {
-				dm.userId.online = !!dm.userId.socketId;
-				delete dm.userId.socketId;
-				return dm;
+			modifiedUser.directMessages.sort((a, b) => {
+				if (a.channelId.messages.length === 0) return 1;
+				if (b.channelId.messages.length === 0) return -1;
+				return (
+					b.channelId.messages[0].createdAt - a.channelId.messages[0].createdAt
+				);
 			});
 			res.status(200).json(modifiedUser);
 		})
