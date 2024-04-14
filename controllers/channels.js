@@ -98,52 +98,6 @@ exports.getChannelMessages = async (req, res, next) => {
 		}
 		next(err);
 	}
-
-	// Channel.findById(cid)
-	// 	.select("participants messages")
-	// 	.populate({
-	// 		path: "messages",
-	// 		select: "-channel -__v",
-	// 		options: {
-	// 			sort: { createdAt: -1 },
-	// 			limit: limit,
-	// 			skip: (page - 1) * limit,
-	// 		},
-	// 		populate: {
-	// 			path: "author",
-	// 			select: "_id displayName",
-	// 		},
-	// 	})
-	// 	.then((channel) => {
-	// 		if (!channel) {
-	// 			const error = new Error("Channel not found");
-	// 			error.statusCode = 404;
-	// 			throw error;
-	// 		}
-	// 		if (
-	// 			!channel.participants.find(
-	// 				(p) => p.toString() === req.userId.toString()
-	// 			)
-	// 		) {
-	// 			const error = new Error("User is not a participant of the channel");
-	// 			error.statusCode = 403;
-	// 			throw error;
-	// 		}
-	// 		return {
-	// 			totalMessages: Message.find({ channel: cid }).countDocuments().exec(),
-	// 			channel,
-	// 		};
-	// 	})
-	// 	.then(({ totalMessages, channel }) => {
-	// 		console.log(totalMessages);
-	// 		res.status(200).json({ totalMessages, messages: channel.messages });
-	// 	})
-	// 	.catch((err) => {
-	// 		if (!err.statusCode) {
-	// 			err.statusCode = 500;
-	// 		}
-	// 		next(err);
-	// 	});
 };
 
 exports.postChannel = async function (req, res, next) {
