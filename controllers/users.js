@@ -1,6 +1,7 @@
 const User = require("../models/user");
 const Channel = require("../models/channel");
 const { Friend, FriendStatus } = require("../models/friend");
+const { getIO } = require("../socket");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
@@ -97,11 +98,15 @@ exports.addFriend = async function (req, res, next) {
 		}
 		const user2 = await User.findOne({
 			$or: orQuery,
-		}).populate("friends");
+		})
+			.select("+socketId")
+			.populate("friends");
 		if (user2._id.toString() === UserA.toString()) {
 			return res.status(422).json({ message: "Cannot add yourself" });
 		}
 		UserB = user2._id.toString();
+		const user1 = await User.findById(UserA);
+		const name = user1.displayName;
 		if (
 			user2.friends.find((f) => {
 				return (
@@ -118,6 +123,10 @@ exports.addFriend = async function (req, res, next) {
 				{ recipient: UserA, requester: UserB },
 				{ $set: { status: FriendStatus.FRIENDS } }
 			);
+			if (user2.socketId)
+				getIO().to(user2.socketId).emit("friendRequestAccepted", {
+					name,
+				});
 			return res.status(200).json({ message: "Friend accepted" });
 		}
 		if (
@@ -148,6 +157,10 @@ exports.addFriend = async function (req, res, next) {
 			{ _id: UserB },
 			{ $addToSet: { friends: docB._id } }
 		);
+		if (user2.socketId)
+			getIO().to(user2.socketId).emit("friendRequest", {
+				name,
+			});
 		return res.status(200).json({ status: "Friend added" });
 	} catch (err) {
 		if (!err.statusCode) {
@@ -167,7 +180,8 @@ exports.removeFriend = async function (req, res, next) {
 		res.status(422).json({ message: "Cannot remove yourself" });
 	}
 	try {
-		if (!(await User.findById(UserB))) {
+		const user2 = await User.findById(UserB).select("+socketId");
+		if (!user2) {
 			const error = new Error("User not found");
 			error.statusCode = 404;
 			throw error;
@@ -188,6 +202,12 @@ exports.removeFriend = async function (req, res, next) {
 			{ _id: UserB },
 			{ $pull: { friends: docB._id } }
 		);
+		const user1 = await User.findById(UserA);
+		const name = user1.displayName;
+		if (user2.socketId)
+			getIO().to(user2.socketId).emit("friendRemoved", {
+				name,
+			});
 		return res.status(200).json({ message: "Friend removed" });
 	} catch (err) {
 		if (!err.statusCode) {

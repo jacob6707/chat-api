@@ -15,7 +15,7 @@ router.get("/:id/messages", isAuth, channelsController.getChannelMessages);
 router.post(
 	"/:id",
 	isAuth,
-	[body("content").notEmpty()],
+	[body("content").trim().notEmpty().isLength({ max: 2000 })],
 	channelsController.postChannel
 );
 

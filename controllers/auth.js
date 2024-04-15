@@ -52,6 +52,7 @@ exports.login = async (req, res, next) => {
 		const user = await User.findOne({
 			$or: [{ email: username }, { username: username }],
 		})
+			.select("+password")
 			.populate("friends", "-updatedAt -__v")
 			.populate("directMessages.userId", "displayName status about avatarUrl")
 			.populate({
@@ -110,6 +111,7 @@ exports.testToken = (req, res, next) => {
 	}
 	const uid = dToken.userId;
 	User.findById(uid)
+		.select("password")
 		.then((user) => {
 			if (!user) {
 				const error = new Error("Bearer of token not found");
