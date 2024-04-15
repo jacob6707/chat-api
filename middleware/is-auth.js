@@ -16,6 +16,7 @@ module.exports = (req, res, next) => {
 		throw error;
 	}
 	User.findById(uid)
+		.select("password")
 		.then((user) => {
 			if (!user) {
 				const error = new Error("Bearer of token not found");

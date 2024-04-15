@@ -113,14 +113,17 @@ exports.postChannel = async function (req, res, next) {
 			error.data = errors.array();
 			throw error;
 		}
-		const channel = await Channel.findById(cid);
+		const content = req.body.content;
+		const channel = await Channel.findById(cid).populate("participants");
 		if (!channel) {
 			const error = new Error("Channel not found");
 			error.statusCode = 404;
 			throw error;
 		}
 		if (
-			!channel.participants.find((p) => p.toString() === req.userId.toString())
+			!channel.participants.find(
+				(p) => p._id.toString() === req.userId.toString()
+			)
 		) {
 			const error = new Error("User is not a participant of the channel");
 			error.statusCode = 403;
@@ -138,7 +141,6 @@ exports.postChannel = async function (req, res, next) {
 				throw error;
 			}
 		}
-		const content = req.body.content;
 		console.log(content);
 		const message = new Message({
 			channel: cid,
@@ -153,9 +155,10 @@ exports.postChannel = async function (req, res, next) {
 			.emit("message", {
 				action: "create",
 				channel: cid,
-				sender: channel.participants.find(
-					(p) => p.toString() !== req.userId.toString()
-				).displayName,
+				sender: channel
+					.toObject()
+					.participants.find((p) => p._id.toString() === req.userId.toString())
+					.displayName,
 				content: content,
 			});
 		return res.status(200).send(message);
@@ -194,9 +197,15 @@ exports.createChannel = async function (req, res, next) {
 		});
 		await channel.save();
 		for (const participant of participants) {
-			const user = await User.findOne({ _id: participant });
+			const user = await User.findOne({ _id: participant }).select("+socketId");
 			user.directMessages.push({ userId: participant, channelId: channel.id });
 			await user.save();
+			if (user.socketId && user._id.toString() !== req.userId.toString()) {
+				getIO().to(user.socketId).emit("channel", {
+					action: "create",
+					channel: channel,
+				});
+			}
 		}
 		return res.status(201).json(channel);
 	} catch (err) {
@@ -237,11 +246,17 @@ exports.deleteChannel = async function (req, res, next) {
 		await Message.deleteMany({ channel: cid });
 		await Channel.findByIdAndDelete(cid);
 		for (const participant of channel.participants) {
-			const user = await User.findOne({ _id: participant });
+			const user = await User.findOne({ _id: participant }).select("+socketId");
 			user.directMessages = user.directMessages.filter(
 				(dm) => dm.channelId.toString() !== cid.toString()
 			);
 			await user.save();
+			if (user.socketId && user._id.toString() !== req.userId.toString()) {
+				getIO().to(user.socketId).emit("channel", {
+					action: "delete",
+					channel: channel,
+				});
+			}
 		}
 		return res.status(200).json({ message: "Channel deleted", channelId: cid });
 	} catch (err) {
@@ -253,7 +268,6 @@ exports.deleteChannel = async function (req, res, next) {
 };
 
 exports.addParticipant = async function (req, res, next) {
-	// TODO: Implement adding a participant to a channel
 	try {
 		const cid = req.params.id;
 		const uid = req.body.userId;
@@ -273,7 +287,7 @@ exports.addParticipant = async function (req, res, next) {
 			error.statusCode = 403;
 			throw error;
 		}
-		const user = await User.findById(uid);
+		const user = await User.findById(uid).select("+socketId");
 		if (!user) {
 			const error = new Error("User not found");
 			error.statusCode = 404;
@@ -288,6 +302,11 @@ exports.addParticipant = async function (req, res, next) {
 		await channel.save();
 		user.directMessages.push({ userId: uid, channelId: cid });
 		await user.save();
+		if (user.socketId)
+			getIO().to(user.socketId).emit("channel", {
+				action: "create",
+				channel: channel,
+			});
 		return res.status(200).json(channel);
 	} catch (err) {
 		if (!err.statusCode) {
@@ -298,7 +317,6 @@ exports.addParticipant = async function (req, res, next) {
 };
 
 exports.removeParticipant = async function (req, res, next) {
-	// TODO: Implement removing a participant from a channel
 	try {
 		const cid = req.params.id;
 		const uid = req.body.userId;
@@ -318,7 +336,7 @@ exports.removeParticipant = async function (req, res, next) {
 			error.statusCode = 403;
 			throw error;
 		}
-		const user = await User.findById(uid);
+		const user = await User.findById(uid).select("+socketId");
 		if (!user) {
 			const error = new Error("User not found");
 			error.statusCode = 404;
@@ -337,6 +355,11 @@ exports.removeParticipant = async function (req, res, next) {
 			(dm) => dm.channelId.toString() !== cid.toString()
 		);
 		await user.save();
+		if (user.socketId)
+			getIO().to(user.socketId).emit("channel", {
+				action: "delete",
+				channel: channel,
+			});
 		res.status(200).json(channel);
 	} catch (err) {
 		if (!err.statusCode) {
