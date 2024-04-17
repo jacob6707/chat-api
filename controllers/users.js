@@ -2,6 +2,9 @@ const User = require("../models/user");
 const Channel = require("../models/channel");
 const { Friend, FriendStatus } = require("../models/friend");
 const { getIO } = require("../socket");
+const bcrypt = require("bcryptjs");
+const sharp = require("sharp");
+const fs = require("fs");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
@@ -295,6 +298,73 @@ exports.updateStatus = async function (req, res, next) {
 			throw error;
 		}
 		res.status(200).json({ message: "Status updated" });
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.updateSettings = async function (req, res, next) {
+	const { displayName, about } = req.body;
+	try {
+		const user = await User.findById(req.userId);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (req.file) {
+			const path = user.avatarUrl.split("/").pop();
+			if (path)
+				fs.unlink(`public/avatars/${path}`, (err) => {
+					if (err) {
+						console.error(err);
+						return;
+					}
+				});
+			const { buffer } = req.file;
+			const filename = `${+new Date()}-${req.userId}.webp`;
+			await sharp(buffer)
+				.resize({ width: 256, height: 256 })
+				.toFile(`public/avatars/${filename}`);
+			user.avatarUrl = `${req.protocol}://${req.get(
+				"host"
+			)}/public/avatars/${filename}`;
+		}
+		user.displayName = displayName;
+		user.about = about;
+		await user.save();
+		res.status(200).json({ message: "Settings updated" });
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.deleteAvatar = async function (req, res, next) {
+	try {
+		const user = await User.findById(req.userId);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (user.avatarUrl) {
+			const path = user.avatarUrl.split("/").pop();
+			fs.unlink(`public/avatars/${path}`, (err) => {
+				if (err) {
+					console.error(err);
+					return res.status(500).json({ message: "Failed to delete avatar" });
+				}
+			});
+		}
+		user.avatarUrl = "";
+		await user.save();
+		res.status(200).json({ message: "Avatar deleted" });
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;

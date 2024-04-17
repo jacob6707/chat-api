@@ -145,3 +145,39 @@ exports.testToken = (req, res, next) => {
 			next(err);
 		});
 };
+
+exports.updatePassword = async function (req, res, next) {
+	const { oldPassword, newPassword } = req.body;
+	try {
+		const user = await User.findById(req.userId).select("+password");
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		const isEqual = await bcrypt.compare(oldPassword, user.password);
+		if (!isEqual) {
+			const error = new Error("Incorrect password");
+			error.statusCode = 401;
+			throw error;
+		}
+		const hashedPassword = await bcrypt.hash(newPassword, 12);
+		user.password = hashedPassword;
+		await user.save();
+		const token = jwt.sign(
+			{
+				userId: req.userId,
+			},
+			hashedPassword,
+			{
+				noTimestamp: true,
+			}
+		);
+		res.status(200).json({ message: "Password updated", token: token });
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
