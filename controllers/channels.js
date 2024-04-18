@@ -14,7 +14,7 @@ exports.getChannel = (req, res, next) => {
 	}
 	Channel.findById(cid)
 		.select("-messages -__v")
-		.populate("participants", "_id displayName status.current")
+		.populate("participants", "_id displayName avatarUrl status.current")
 		.populate({
 			path: "messages",
 			model: "Message",
@@ -75,7 +75,7 @@ exports.getChannelMessages = async (req, res, next) => {
 				},
 				populate: {
 					path: "author",
-					select: "_id displayName",
+					select: "_id displayName avatarUrl",
 				},
 			});
 		if (!channel) {
@@ -407,7 +407,8 @@ exports.editMessage = async function (req, res, next) {
 		await message.save();
 		getIO().to(cid).emit("message", {
 			action: "update",
-			message: message,
+			channel: message.channel._id,
+			messageId: mid,
 		});
 		return res.status(200).json(message);
 	} catch (err) {
@@ -427,7 +428,7 @@ exports.deleteMessage = async function (req, res, next) {
 				.status(422)
 				.json({ message: "Channel ID or Message ID invalid" });
 		}
-		const message = await Message.findById(mid).populate("channel");
+		const message = await Message.findById(mid);
 		if (!message) {
 			const error = new Error("Message not found");
 			error.statusCode = 404;
@@ -446,7 +447,8 @@ exports.deleteMessage = async function (req, res, next) {
 		await Message.findByIdAndDelete(mid);
 		getIO().to(cid).emit("message", {
 			action: "delete",
-			message: message,
+			channel: message.channel,
+			messageId: mid,
 		});
 		return res.status(200).json({ message: "Message deleted", messageId: mid });
 	} catch (err) {

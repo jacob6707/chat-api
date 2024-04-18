@@ -16,19 +16,19 @@ exports.getCurrentUser = (req, res, next) => {
 		)
 		.populate({
 			path: "directMessages.channelId",
-			select: "_id name isDM messages participants",
-			populate: [
-				{
-					path: "participants",
-					select: "displayName status about avatarUrl",
-				},
-				{
-					path: "messages",
-					model: "Message",
-					perDocumentLimit: 1,
-					options: { sort: { createdAt: -1 }, limit: 1 },
-				},
-			],
+			select: "_id participants isDM createdAt updatedAt",
+			// populate: [
+			// 	{
+			// 		path: "participants",
+			// 		select: "displayName status about avatarUrl",
+			// 	},
+			// 	{
+			// 		path: "messages",
+			// 		model: "Message",
+			// 		perDocumentLimit: 1,
+			// 		options: { sort: { createdAt: -1 }, limit: 1 },
+			// 	},
+			// ],
 		})
 		.then((user) => {
 			if (!user) {
@@ -38,11 +38,8 @@ exports.getCurrentUser = (req, res, next) => {
 			}
 			const modifiedUser = user.toObject();
 			modifiedUser.directMessages.sort((a, b) => {
-				if (a.channelId.messages.length === 0) return 1;
-				if (b.channelId.messages.length === 0) return -1;
-				return (
-					b.channelId.messages[0].createdAt - a.channelId.messages[0].createdAt
-				);
+				if (a.channelId.updatedAt === b.channelId.updatedAt) return 0;
+				return b.channelId.updatedAt - a.channelId.updatedAt;
 			});
 			res.status(200).json(modifiedUser);
 		})
@@ -264,6 +261,7 @@ exports.postMessage = async function (req, res, next) {
 			await user.save();
 			user2.directMessages.push({ userId: req.userId, channelId: channel.id });
 			await user2.save();
+			if (user2.socketId) getIO().to(user2.socketId).emit("channel");
 			status = 201;
 		}
 		res.status(status).json(dm);
@@ -291,11 +289,25 @@ exports.updateStatus = async function (req, res, next) {
 					current: status,
 				},
 			}
-		);
+		)
+			.select("+friends")
+			.populate("friends");
 		if (!user) {
 			const error = new Error("User not found");
 			error.statusCode = 404;
 			throw error;
+		}
+		const friends = user.friends;
+		for (const friend of friends) {
+			const friendUser = await User.findById(friend.recipient).select(
+				"+socketId"
+			);
+			// if (friendUser.socketId) {
+			// 	getIO().to(friendUser.socketId).emit("status", {
+			// 		_id: req.userId,
+			// 		status,
+			// 	});
+			// }
 		}
 		res.status(200).json({ message: "Status updated" });
 	} catch (err) {

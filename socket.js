@@ -28,12 +28,13 @@ module.exports = {
 			});
 			socket.on("disconnect", async () => {
 				if (socket.user) {
-					await User.findByIdAndUpdate(socket.user._id, {
+					const user = await User.findByIdAndUpdate(socket.user._id, {
 						socketId: "",
-						status: {
-							current: "Offline",
-							preferred: socket.user.status.preferred,
-						},
+						"status.current": "Offline",
+					});
+					socket.broadcast.emit("status", {
+						_id: user._id,
+						status: "Offline",
 					});
 				}
 			});

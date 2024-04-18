@@ -15,6 +15,10 @@ exports.authenticate = async function (socket, next) {
 			preferred: user.status.preferred,
 		},
 	});
+	socket.broadcast.emit("status", {
+		_id: user._id,
+		status: user.status.preferred,
+	});
 	next();
 };
 
