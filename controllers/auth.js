@@ -12,8 +12,8 @@ exports.signup = (req, res, next) => {
 		error.data = errors.array();
 		throw error;
 	}
-	const email = req.body.email;
-	const username = req.body.username;
+	const email = req.body.email.toLowerCase();
+	const username = req.body.username.toLowerCase();
 	const password = req.body.password;
 
 	User.countDocuments({ $or: [{ email: email }, { username: username }] })
@@ -45,7 +45,7 @@ exports.signup = (req, res, next) => {
 };
 
 exports.login = async (req, res, next) => {
-	const username = req.body.username;
+	const username = req.body.username.toLowerCase();
 	const password = req.body.password;
 
 	try {
