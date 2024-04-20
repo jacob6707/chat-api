@@ -11,7 +11,11 @@ router.put(
 	[
 		body("email").trim().isEmail(),
 		body("password").trim().isLength({ min: 4 }),
-		body("username").trim().notEmpty().isAlphanumeric(),
+		body("username")
+			.trim()
+			.notEmpty()
+			.isAlphanumeric()
+			.isLength({ min: 3, max: 20 }),
 	],
 	authController.signup
 );
