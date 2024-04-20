@@ -14,7 +14,7 @@ exports.getChannel = (req, res, next) => {
 	}
 	Channel.findById(cid)
 		.select("-messages -__v")
-		.populate("participants", "_id displayName status.current")
+		.populate("participants", "_id displayName avatarUrl status.current")
 		.populate({
 			path: "messages",
 			model: "Message",
@@ -67,7 +67,7 @@ exports.getChannelMessages = async (req, res, next) => {
 			.select("participants messages")
 			.populate({
 				path: "messages",
-				select: "-channel -__v",
+				select: "-__v",
 				options: {
 					sort: { createdAt: -1 },
 					limit: limit,
@@ -75,7 +75,7 @@ exports.getChannelMessages = async (req, res, next) => {
 				},
 				populate: {
 					path: "author",
-					select: "_id displayName",
+					select: "_id displayName avatarUrl",
 				},
 			});
 		if (!channel) {
@@ -361,6 +361,96 @@ exports.removeParticipant = async function (req, res, next) {
 				channel: channel,
 			});
 		res.status(200).json(channel);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+// implement editMessage and deleteMessage routes
+exports.editMessage = async function (req, res, next) {
+	const cid = req.params.id;
+	const mid = req.params.mid;
+	try {
+		if (!cid.match(/^[0-9a-fA-F]{24}$/) || !mid.match(/^[0-9a-fA-F]{24}$/)) {
+			return res
+				.status(422)
+				.json({ message: "Channel ID or Message ID invalid" });
+		}
+		const errors = validationResult(req);
+		if (!errors.isEmpty()) {
+			const error = new Error("Validation failed");
+			error.statusCode = 422;
+			error.data = errors.array();
+			throw error;
+		}
+		const content = req.body.content;
+		const message = await Message.findById(mid).populate("channel");
+		if (!message) {
+			const error = new Error("Message not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (message.channel._id.toString() !== cid.toString()) {
+			const error = new Error("Message does not belong to channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		if (message.author.toString() !== req.userId.toString()) {
+			const error = new Error("User is not the author of the message");
+			error.statusCode = 403;
+			throw error;
+		}
+		message.content = content;
+		await message.save();
+		getIO().to(cid).emit("message", {
+			action: "update",
+			channel: message.channel._id,
+			messageId: mid,
+		});
+		return res.status(200).json(message);
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.deleteMessage = async function (req, res, next) {
+	const cid = req.params.id;
+	const mid = req.params.mid;
+	try {
+		if (!cid.match(/^[0-9a-fA-F]{24}$/) || !mid.match(/^[0-9a-fA-F]{24}$/)) {
+			return res
+				.status(422)
+				.json({ message: "Channel ID or Message ID invalid" });
+		}
+		const message = await Message.findById(mid);
+		if (!message) {
+			const error = new Error("Message not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (message.channel._id.toString() !== cid.toString()) {
+			const error = new Error("Message does not belong to channel");
+			error.statusCode = 403;
+			throw error;
+		}
+		if (message.author.toString() !== req.userId.toString()) {
+			const error = new Error("User is not the author of the message");
+			error.statusCode = 403;
+			throw error;
+		}
+		await Message.findByIdAndDelete(mid);
+		getIO().to(cid).emit("message", {
+			action: "delete",
+			channel: message.channel,
+			messageId: mid,
+		});
+		return res.status(200).json({ message: "Message deleted", messageId: mid });
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;

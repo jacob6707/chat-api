@@ -3,6 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const fs = require("fs");
 
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
@@ -13,6 +14,23 @@ require("dotenv").config();
 
 const PORT = process.env.PORT || 8080;
 const MONGODB_ENDPOINT = process.env.MONGODB_ENDPOINT;
+
+// check if public/attachments and public/avatars exist
+const attachmentsDir = path.join(__dirname, "public", "attachments");
+const avatarsDir = path.join(__dirname, "public", "avatars");
+try {
+	if (!fs.existsSync(path.join(__dirname, "public"))) {
+		fs.mkdirSync(path.join(__dirname, "public"));
+	}
+	if (!fs.existsSync(attachmentsDir)) {
+		fs.mkdirSync(attachmentsDir);
+	}
+	if (!fs.existsSync(avatarsDir)) {
+		fs.mkdirSync(avatarsDir);
+	}
+} catch (err) {
+	console.log(err);
+}
 
 const app = express();
 

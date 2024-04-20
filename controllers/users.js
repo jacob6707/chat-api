@@ -2,6 +2,9 @@ const User = require("../models/user");
 const Channel = require("../models/channel");
 const { Friend, FriendStatus } = require("../models/friend");
 const { getIO } = require("../socket");
+const bcrypt = require("bcryptjs");
+const sharp = require("sharp");
+const fs = require("fs");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
@@ -13,19 +16,19 @@ exports.getCurrentUser = (req, res, next) => {
 		)
 		.populate({
 			path: "directMessages.channelId",
-			select: "_id name isDM messages participants",
-			populate: [
-				{
-					path: "participants",
-					select: "displayName status about avatarUrl",
-				},
-				{
-					path: "messages",
-					model: "Message",
-					perDocumentLimit: 1,
-					options: { sort: { createdAt: -1 }, limit: 1 },
-				},
-			],
+			select: "_id participants isDM createdAt updatedAt",
+			// populate: [
+			// 	{
+			// 		path: "participants",
+			// 		select: "displayName status about avatarUrl",
+			// 	},
+			// 	{
+			// 		path: "messages",
+			// 		model: "Message",
+			// 		perDocumentLimit: 1,
+			// 		options: { sort: { createdAt: -1 }, limit: 1 },
+			// 	},
+			// ],
 		})
 		.then((user) => {
 			if (!user) {
@@ -35,11 +38,8 @@ exports.getCurrentUser = (req, res, next) => {
 			}
 			const modifiedUser = user.toObject();
 			modifiedUser.directMessages.sort((a, b) => {
-				if (a.channelId.messages.length === 0) return 1;
-				if (b.channelId.messages.length === 0) return -1;
-				return (
-					b.channelId.messages[0].createdAt - a.channelId.messages[0].createdAt
-				);
+				if (a.channelId.updatedAt === b.channelId.updatedAt) return 0;
+				return b.channelId.updatedAt - a.channelId.updatedAt;
 			});
 			res.status(200).json(modifiedUser);
 		})
@@ -57,9 +57,7 @@ exports.getUser = (req, res, next) => {
 		res.status(422).json({ message: "User ID invalid" });
 	}
 	User.findById(uid)
-		.select(
-			"-email -password -friends -directMessages -createdAt -updatedAt -__v"
-		)
+		.select("-email -password -friends -directMessages -updatedAt -__v")
 		.then((user) => {
 			if (!user) {
 				const error = new Error("User not found");
@@ -261,6 +259,7 @@ exports.postMessage = async function (req, res, next) {
 			await user.save();
 			user2.directMessages.push({ userId: req.userId, channelId: channel.id });
 			await user2.save();
+			if (user2.socketId) getIO().to(user2.socketId).emit("channel");
 			status = 201;
 		}
 		res.status(status).json(dm);
@@ -288,13 +287,94 @@ exports.updateStatus = async function (req, res, next) {
 					current: status,
 				},
 			}
-		);
+		)
+			.select("+friends")
+			.populate("friends");
 		if (!user) {
 			const error = new Error("User not found");
 			error.statusCode = 404;
 			throw error;
 		}
+		const friends = user.friends;
+		for (const friend of friends) {
+			const friendUser = await User.findById(friend.recipient).select(
+				"+socketId"
+			);
+			// if (friendUser.socketId) {
+			// 	getIO().to(friendUser.socketId).emit("status", {
+			// 		_id: req.userId,
+			// 		status,
+			// 	});
+			// }
+		}
 		res.status(200).json({ message: "Status updated" });
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.updateSettings = async function (req, res, next) {
+	const { displayName, about } = req.body;
+	try {
+		const user = await User.findById(req.userId);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (req.file) {
+			const path = user.avatarUrl.split("/").pop();
+			if (path)
+				fs.unlink(`public/avatars/${path}`, (err) => {
+					if (err) {
+						console.error(err);
+						return;
+					}
+				});
+			const { buffer } = req.file;
+			const filename = `${+new Date()}-${req.userId}.webp`;
+			await sharp(buffer)
+				.resize({ width: 256, height: 256 })
+				.toFile(`public/avatars/${filename}`);
+			user.avatarUrl = `${req.protocol}://${req.get(
+				"host"
+			)}/public/avatars/${filename}`;
+		}
+		user.displayName = displayName;
+		user.about = about;
+		await user.save();
+		res.status(200).json({ message: "Settings updated" });
+	} catch (err) {
+		if (!err.statusCode) {
+			err.statusCode = 500;
+		}
+		next(err);
+	}
+};
+
+exports.deleteAvatar = async function (req, res, next) {
+	try {
+		const user = await User.findById(req.userId);
+		if (!user) {
+			const error = new Error("User not found");
+			error.statusCode = 404;
+			throw error;
+		}
+		if (user.avatarUrl) {
+			const path = user.avatarUrl.split("/").pop();
+			fs.unlink(`public/avatars/${path}`, (err) => {
+				if (err) {
+					console.error(err);
+					return res.status(500).json({ message: "Failed to delete avatar" });
+				}
+			});
+		}
+		user.avatarUrl = "";
+		await user.save();
+		res.status(200).json({ message: "Avatar deleted" });
 	} catch (err) {
 		if (!err.statusCode) {
 			err.statusCode = 500;
