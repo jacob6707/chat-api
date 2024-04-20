@@ -57,9 +57,7 @@ exports.getUser = (req, res, next) => {
 		res.status(422).json({ message: "User ID invalid" });
 	}
 	User.findById(uid)
-		.select(
-			"-email -password -friends -directMessages -createdAt -updatedAt -__v"
-		)
+		.select("-email -password -friends -directMessages -updatedAt -__v")
 		.then((user) => {
 			if (!user) {
 				const error = new Error("User not found");
