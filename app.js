@@ -34,6 +34,8 @@ try {
 
 const app = express();
 
+app.enable("trust proxy");
+
 app.use(bodyParser.json());
 app.use(cors());
 
