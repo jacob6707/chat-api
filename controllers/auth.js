@@ -90,6 +90,10 @@ exports.login = async (req, res, next) => {
 				noTimestamp: true,
 			}
 		);
+		userData.directMessages.sort((a, b) => {
+			if (a.channelId.updatedAt === b.channelId.updatedAt) return 0;
+			return b.channelId.updatedAt - a.channelId.updatedAt;
+		});
 		res.status(200).json({ user: userData, token: token });
 	} catch (err) {
 		if (!err.statusCode) {
@@ -147,6 +151,13 @@ exports.testToken = (req, res, next) => {
 };
 
 exports.updatePassword = async function (req, res, next) {
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		const error = new Error("Validation failed");
+		error.statusCode = 422;
+		error.data = errors.array();
+		throw error;
+	}
 	const { oldPassword, newPassword } = req.body;
 	try {
 		const user = await User.findById(req.userId).select("+password");

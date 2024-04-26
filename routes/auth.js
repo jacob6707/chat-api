@@ -24,6 +24,11 @@ router.post("/login", authController.login);
 
 router.get("/", authController.testToken);
 
-router.put("/password", isAuth, authController.updatePassword);
+router.put(
+	"/password",
+	isAuth,
+	[body("newPassword").trim().isLength({ min: 4 })],
+	authController.updatePassword
+);
 
 module.exports = router;
