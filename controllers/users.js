@@ -287,12 +287,12 @@ exports.updateStatus = async function (req, res, next) {
 			const friendUser = await User.findById(friend.recipient).select(
 				"+socketId"
 			);
-			// if (friendUser.socketId) {
-			// 	getIO().to(friendUser.socketId).emit("status", {
-			// 		_id: req.userId,
-			// 		status,
-			// 	});
-			// }
+			if (friendUser.socketId) {
+				getIO().to(friendUser.socketId).emit("status", {
+					_id: req.userId,
+					status,
+				});
+			}
 		}
 		res.status(200).json({ message: "Status updated" });
 	} catch (err) {
