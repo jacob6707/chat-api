@@ -8,7 +8,6 @@ const fs = require("fs");
 const authRoutes = require("./routes/auth");
 const usersRoutes = require("./routes/users");
 const channelsRoutes = require("./routes/channels");
-const { joinChannel } = require("./util/socketEvents");
 
 require("dotenv").config();
 

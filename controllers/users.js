@@ -2,13 +2,12 @@ const User = require("../models/user");
 const Channel = require("../models/channel");
 const { Friend, FriendStatus } = require("../models/friend");
 const { getIO } = require("../socket");
-const bcrypt = require("bcryptjs");
 const sharp = require("sharp");
 const fs = require("fs");
 
 exports.getCurrentUser = (req, res, next) => {
 	User.findById(req.userId)
-		.select("-password -socketId +status.preferred")
+		.select("-socketId +status.preferred")
 		.populate("friends", "-updatedAt -__v")
 		.populate(
 			"directMessages.userId",
@@ -17,18 +16,6 @@ exports.getCurrentUser = (req, res, next) => {
 		.populate({
 			path: "directMessages.channelId",
 			select: "_id participants isDM createdAt updatedAt",
-			// populate: [
-			// 	{
-			// 		path: "participants",
-			// 		select: "displayName status about avatarUrl",
-			// 	},
-			// 	{
-			// 		path: "messages",
-			// 		model: "Message",
-			// 		perDocumentLimit: 1,
-			// 		options: { sort: { createdAt: -1 }, limit: 1 },
-			// 	},
-			// ],
 		})
 		.then((user) => {
 			if (!user) {
@@ -222,7 +209,7 @@ exports.postMessage = async function (req, res, next) {
 			res.status(422).json({ message: "User ID invalid" });
 		}
 		const user = await User.findOne({ _id: req.userId }).populate("friends");
-		const user2 = await User.findOne({ _id: uid });
+		const user2 = await User.findOne({ _id: uid }).select("+socketId");
 		if (!user) {
 			const error = new Error("User not found");
 			error.statusCode = 403;
