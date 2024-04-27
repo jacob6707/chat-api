@@ -1,1 +1,1 @@
-exports.MESSAGES_PER_PAGE = 4;
+exports.MESSAGES_PER_PAGE = 50;
