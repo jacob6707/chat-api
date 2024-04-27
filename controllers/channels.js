@@ -141,7 +141,6 @@ exports.postChannel = async function (req, res, next) {
 				throw error;
 			}
 		}
-		console.log(content);
 		const message = new Message({
 			channel: cid,
 			author: req.userId,
@@ -180,7 +179,7 @@ exports.createChannel = async function (req, res, next) {
 			throw error;
 		}
 		const participants = req.body.participants;
-		participants.push(req.userId);
+		participants.unshift(req.userId);
 		const users = await User.find({
 			_id: { $in: participants },
 		}).countDocuments();
@@ -238,11 +237,11 @@ exports.deleteChannel = async function (req, res, next) {
 			error.statusCode = 403;
 			throw error;
 		}
-		// if (channel.owner.toString() !== req.userId.toString()) {
-		// 	const error = new Error("User is not the owner of the channel");
-		// 	error.statusCode = 403;
-		// 	throw error;
-		// }
+		if (channel?.owner.toString() !== req.userId.toString()) {
+			const error = new Error("User is not the owner of the channel");
+			error.statusCode = 403;
+			throw error;
+		}
 		await Message.deleteMany({ channel: cid });
 		await Channel.findByIdAndDelete(cid);
 		for (const participant of channel.participants) {
