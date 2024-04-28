@@ -368,7 +368,6 @@ exports.removeParticipant = async function (req, res, next) {
 	}
 };
 
-// implement editMessage and deleteMessage routes
 exports.editMessage = async function (req, res, next) {
 	const cid = req.params.id;
 	const mid = req.params.mid;
@@ -433,6 +432,12 @@ exports.deleteMessage = async function (req, res, next) {
 			error.statusCode = 404;
 			throw error;
 		}
+		const channel = await Channel.findById(cid).select("messages");
+		if (!channel) {
+			const error = new Error("Channel not found");
+			error.statusCode = 404;
+			throw error;
+		}
 		if (message.channel._id.toString() !== cid.toString()) {
 			const error = new Error("Message does not belong to channel");
 			error.statusCode = 403;
@@ -444,6 +449,10 @@ exports.deleteMessage = async function (req, res, next) {
 			throw error;
 		}
 		await Message.findByIdAndDelete(mid);
+		channel.messages = channel.messages.filter(
+			(m) => m.toString() !== mid.toString()
+		);
+		await channel.save();
 		getIO().to(cid).emit("message", {
 			action: "delete",
 			channel: message.channel,
